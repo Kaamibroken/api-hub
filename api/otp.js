@@ -1,28 +1,29 @@
 import fetch from "node-fetch";
 
 export default async function handler(req, res) {
-  try {
-    const cookie = process.env.PHPSESSID;
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
 
-    if (!cookie) {
-      return res.status(500).json({ error: "Missing PHPSESSID in environment" });
+  try {
+    const PHPSESSID = process.env.PHPSESSID; // Vercel Environment Variable
+    if (!PHPSESSID) {
+      return res.status(500).json({ error: "PHPSESSID not set in environment variables" });
     }
 
     const response = await fetch("http://51.89.99.105/NumberPanel/client/SMSCDRStats", {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        "Cookie": `PHPSESSID=${cookie}`,
+        "Cookie": `PHPSESSID=${PHPSESSID}`
       },
-      body: "fdate1=2025-10-30+00%3A00%3A00&fdate2=2025-10-30+23%3A59%3A59&frange=&fnum=&fcli=",
+      body: "fdate1=2025-10-30+00%3A00%3A00&fdate2=2025-10-30+23%3A59%3A59&frange=&fnum=&fcli="
     });
 
     const text = await response.text();
-
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.status(200).send(text);
   } catch (err) {
-    console.error("❌ Server error:", err);
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 }
