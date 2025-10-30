@@ -1,9 +1,7 @@
 {
-  "name": "kami-otp-api",
+  "name": "kami-flex",
   "version": "1.0.0",
-  "type": "module",
   "dependencies": {
-    "node-fetch": "^3.3.2",
-    "dotenv": "^17.2.3"
+    "node-fetch": "^2.6.7"
   }
 }
