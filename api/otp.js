@@ -1,12 +1,12 @@
 import fetch from "node-fetch";
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") {
+  if (req.method !== "POST" && req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
-    const PHPSESSID = process.env.PHPSESSID; // Vercel Environment Variable
+    const PHPSESSID = process.env.PHPSESSID;
     if (!PHPSESSID) {
       return res.status(500).json({ error: "PHPSESSID not set in environment variables" });
     }
