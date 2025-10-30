@@ -1,10 +1,7 @@
 import fetch from "node-fetch";
-import dotenv from "dotenv";
-
-dotenv.config();
+import 'dotenv/config';
 
 export default async function handler(req, res) {
-  // Sirf POST method allow
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -16,17 +13,17 @@ export default async function handler(req, res) {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
-          "Cookie": `PHPSESSID=${process.env.PHPSESSID}`
+          "Cookie": `PHPSESSID=${process.env.PHPSESSID}`,
         },
-        body:
-          "fdate1=2025-10-30+00%3A00%3A00&fdate2=2025-10-30+23%3A59%3A59&frange=&fnum=&fcli="
+        body: "fdate1=2025-10-30+00%3A00%3A00&fdate2=2025-10-30+23%3A59%3A59&frange=&fnum=&fcli="
       }
     );
 
     const text = await response.text();
     res.status(200).send(text);
+
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "Server Error", message: err.message });
   }
 }
