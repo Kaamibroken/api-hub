@@ -3,7 +3,10 @@ import fetch from "node-fetch";
 export default async function handler(req, res) {
   try {
     const cookie = process.env.PHPSESSID;
-    if (!cookie) return res.status(500).json({ error: "Missing PHPSESSID" });
+
+    if (!cookie) {
+      return res.status(500).json({ error: "Missing PHPSESSID in environment" });
+    }
 
     const response = await fetch("http://51.89.99.105/NumberPanel/client/SMSCDRStats", {
       method: "POST",
@@ -15,9 +18,11 @@ export default async function handler(req, res) {
     });
 
     const text = await response.text();
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.status(200).send(text);
   } catch (err) {
-    console.error("❌ API Error:", err);
+    console.error("❌ Server error:", err);
     res.status(500).json({ error: err.message });
   }
 }
