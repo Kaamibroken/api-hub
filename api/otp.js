@@ -1,6 +1,11 @@
-import fetch from "node-fetch";
+const express = require("express");
+const fetch = require("node-fetch");
+require("dotenv").config();
 
-export default async function handler(req, res) {
+const app = express();
+app.use(express.json());
+
+app.post("/otp", async (req, res) => {
   try {
     const response = await fetch("http://51.89.99.105/NumberPanel/client/SMSCDRStats", {
       method: "POST",
@@ -12,9 +17,11 @@ export default async function handler(req, res) {
     });
 
     const text = await response.text();
-    res.status(200).send(text);
+    res.send(text);
   } catch (err) {
-    console.error("Error:", err);
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).send({ error: err.message });
   }
-}
+});
+
+app.listen(3000, () => console.log("✅ API running on http://localhost:3000"));
