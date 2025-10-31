@@ -1,15 +1,40 @@
 const http = require("http");
 const https = require("https");
+const zlib = require("zlib");
 
 module.exports = async (req, res) => {
   const get = (url, headers) =>
     new Promise((resolve, reject) => {
       const lib = url.startsWith("https") ? https : http;
       const request = lib.get(url, { headers }, (response) => {
-        let data = "";
-        response.on("data", (chunk) => (data += chunk));
-        response.on("end", () => resolve(data));
+        let chunks = [];
+
+        response.on("data", (chunk) => chunks.push(chunk));
+        response.on("end", () => {
+          const buffer = Buffer.concat(chunks);
+
+          
+          const encoding = response.headers["content-encoding"];
+          try {
+            if (encoding === "gzip") {
+              zlib.gunzip(buffer, (err, decoded) => {
+                if (err) return reject(err);
+                resolve(decoded.toString());
+              });
+            } else if (encoding === "deflate") {
+              zlib.inflate(buffer, (err, decoded) => {
+                if (err) return reject(err);
+                resolve(decoded.toString());
+              });
+            } else {
+              resolve(buffer.toString());
+            }
+          } catch (e) {
+            reject(e);
+          }
+        });
       });
+
       request.on("error", reject);
     });
 
@@ -46,7 +71,9 @@ module.exports = async (req, res) => {
       "http://51.89.99.105/NumberPanel/client/SMSCDRStats";
   } else {
     res.statusCode = 400;
-    return res.end(JSON.stringify({ error: "Invalid type (use sms or numbers)" }));
+    return res.end(
+      JSON.stringify({ error: "Invalid type (use sms or numbers)" })
+    );
   }
 
   try {
