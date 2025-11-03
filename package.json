@@ -1,13 +1,7 @@
 {
-  "name": "real-scraper",
+  "name": "kami-flex",
   "version": "1.0.0",
-  "type": "module",
-  "engines": {
-    "node": "22.x"
-  },
   "dependencies": {
-    "cheerio": "^1.0.0-rc.12",
-    "got-scraping": "^4.0.4",
-    "tough-cookie": "^4.1.4"
+    "node-fetch": "^2.6.7"
   }
 }
