@@ -6,8 +6,8 @@ const { URL } = require("url");
 
 // ---------------- CONFIG ----------------
 const BASE_URL = "http://51.89.99.105/NumberPanel";
-const PANEL_USERNAME = "Kami527";
-const PANEL_PASSWORD = "Kami526";
+const PANEL_USERNAME = "Kami527"; // your username
+const PANEL_PASSWORD = "Kami526"; // your password
 
 let CURRENT_COOKIE = null;
 
@@ -91,7 +91,7 @@ async function performLogin() {
   }
 }
 
-// ---------------- MAIN HANDLER ----------------
+// ---------------- MAIN VERCEL HANDLER ----------------
 module.exports = async (req, res) => {
   const params = Object.fromEntries(new URL(req.url, "http://localhost").searchParams);
   const { type } = params;
@@ -101,7 +101,7 @@ module.exports = async (req, res) => {
     return res.end(JSON.stringify({ error: "Missing ?type parameter" }));
   }
 
-  // login if needed
+  // ensure logged in
   if (!CURRENT_COOKIE) {
     const ok = await performLogin();
     if (!ok) {
@@ -120,16 +120,11 @@ module.exports = async (req, res) => {
   };
 
   let url;
-  const timestamp = Date.now();
-
   if (type === "numbers") {
-    url = `${BASE_URL}/client/res/data_smsnumbers.php?frange=&fclient=&sEcho=3&iColumns=6&sColumns=%2C%2C%2C%2C%2C&iDisplayStart=0&iDisplayLength=-1&mDataProp_0=0&sSearch_0=&bRegex_0=false&bSearchable_0=true&bSortable_0=true&mDataProp_1=1&sSearch_1=&bRegex_1=false&bSearchable_1=true&bSortable_1=true&mDataProp_2=2&sSearch_2=&bRegex_2=false&bSearchable_2=true&bSortable_2=true&mDataProp_3=3&sSearch_3=&bRegex_3=false&bSearchable_3=true&bSortable_3=true&mDataProp_4=4&sSearch_4=&bRegex_4=false&bSearchable_4=true&bSortable_4=true&mDataProp_5=5&sSearch_5=&bRegex_5=false&bSearchable_5=true&bSortable_5=true&sSearch=&bRegex=false&iSortCol_0=0&sSortDir_0=asc&iSortingCols=1&_=${timestamp}`;
+    url = `${BASE_URL}/client/res/data_smsnumbers.php?_=${Date.now()}`;
     headers.Referer = `${BASE_URL}/client/MySMSNumbers`;
   } else if (type === "sms") {
-    const today = new Date();
-    const date_start = encodeURIComponent(`${today.getFullYear()}-${today.getMonth()+1}-${today.getDate()} 00:00:00`);
-    const date_end = encodeURIComponent(`${today.getFullYear()}-${today.getMonth()+1}-${today.getDate()} 23:59:59`);
-    url = `${BASE_URL}/client/res/data_smscdr.php?fdate1=${date_start}&fdate2=${date_end}&frange=&fnum=&fcli=&fgdate=&fgmonth=&fgrange=&fgnumber=&fgcli=&fg=0&sEcho=4&iColumns=7&sColumns=%2C%2C%2C%2C%2C%2C&iDisplayStart=0&iDisplayLength=50&mDataProp_0=0&sSearch_0=&bRegex_0=false&bSearchable_0=true&bSortable_0=true&mDataProp_1=1&sSearch_1=&bRegex_1=false&bSearchable_1=true&bSortable_1=true&mDataProp_2=2&sSearch_2=&bRegex_2=false&bSearchable_2=true&bSortable_2=true&mDataProp_3=3&sSearch_3=&bRegex_3=false&bSearchable_3=true&bSortable_3=true&mDataProp_4=4&sSearch_4=&bRegex_4=false&bSearchable_4=true&bSortable_4=true&mDataProp_5=5&sSearch_5=&bRegex_5=false&bSearchable_5=true&bSortable_5=true&mDataProp_6=6&sSearch_6=&bRegex_6=false&bSearchable_6=true&bSortable_6=true&sSearch=&bRegex=false&iSortCol_0=0&sSortDir_0=desc&iSortingCols=1&_=${timestamp}`;
+    url = `${BASE_URL}/client/res/data_smscdr.php?_=${Date.now()}`;
     headers.Referer = `${BASE_URL}/client/SMSCDRStats`;
   } else {
     res.statusCode = 400;
@@ -139,6 +134,7 @@ module.exports = async (req, res) => {
   try {
     let data = await get(url, headers);
 
+    // check if session expired
     if (data.toLowerCase().includes("login") || data.toLowerCase().includes("direct script access")) {
       await performLogin(); // refresh cookie
       headers.Cookie = CURRENT_COOKIE;
