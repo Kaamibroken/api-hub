@@ -1,7 +1,10 @@
+const express = require("express");
 const fetch = require("node-fetch");
-const pycountry = require("pycountry"); // npm install pycountry
-const BASE_URL = "http://51.89.99.105/NumberPanel";
+const pycountry = require("pycountry");
+const app = express();
+const PORT = process.env.PORT || 3000;
 
+const BASE_URL = "http://51.89.99.105/NumberPanel";
 const PANEL_USERNAME = "Kami527";
 const PANEL_PASSWORD = "Kami526";
 
@@ -37,7 +40,7 @@ async function performLogin() {
     const phpsess = cookies.find((c) => c.startsWith("PHPSESSID"));
     if (phpsess) {
       CURRENT_COOKIE = phpsess.split(";")[0];
-      console.log("✅ Login Successful!", CURRENT_COOKIE);
+      console.log("✅ Login Successful!");
       return true;
     }
   }
@@ -94,55 +97,45 @@ function getFlagEmoji(countryName) {
   }
 }
 
-// ---------------- NODE.JS API HANDLER ---------------- //
-module.exports = async (req, res) => {
-  const url = new URL(req.url, "http://localhost");
-  const type = url.searchParams.get("type");
-  const random = url.searchParams.get("random") === "true"; // ?random=true
-
-  if (!type) {
-    res.statusCode = 400;
-    return res.end(JSON.stringify({ error: "Missing ?type parameter" }));
-  }
-
+// ---------------- EXPRESS ROUTES ---------------- //
+app.get("/numbers", async (req, res) => {
   try {
-    if (type === "numbers") {
-      const data = await fetchAPI(getNumbersUrl());
-      let numbers = data.aaData.map((item) => {
-        const full = item[0].trim();
-        const number = item[2];
-        const countryName = full.split("-")[0].trim();
-        return { number, country: countryName, flag: getFlagEmoji(countryName) };
-      });
+    const data = await fetchAPI(getNumbersUrl());
+    let numbers = data.aaData.map((item) => {
+      const full = item[0].trim();
+      const number = item[2];
+      const countryName = full.split("-")[0].trim();
+      return { number, country: countryName, flag: getFlagEmoji(countryName) };
+    });
 
-      if (random && numbers.length) {
-        numbers = [numbers[Math.floor(Math.random() * numbers.length)]];
-      }
-
-      res.setHeader("Content-Type", "application/json");
-      return res.end(JSON.stringify({ success: true, data: numbers }));
+    if (req.query.random === "true" && numbers.length) {
+      numbers = [numbers[Math.floor(Math.random() * numbers.length)]];
     }
 
-    if (type === "otp") {
-      const data = await fetchAPI(getOtpUrl());
-      const otps = [];
-
-      for (const item of data.aaData) {
-        const number = item[2];
-        const msg = (item[4] || "").trim();
-        if (msg && msg !== "0" && msg.toLowerCase() !== "null" && msg.length > 1) {
-          otps.push({ number, message: msg });
-        }
-      }
-
-      res.setHeader("Content-Type", "application/json");
-      return res.end(JSON.stringify({ success: true, data: otps }));
-    }
-
-    res.statusCode = 400;
-    return res.end(JSON.stringify({ error: "Invalid type (numbers or otp)" }));
+    res.json({ success: true, data: numbers });
   } catch (err) {
-    res.statusCode = 500;
-    return res.end(JSON.stringify({ error: "Server error", details: err.message }));
+    res.status(500).json({ success: false, error: err.message });
   }
-};
+});
+
+app.get("/otp", async (req, res) => {
+  try {
+    const data = await fetchAPI(getOtpUrl());
+    const otps = [];
+
+    for (const item of data.aaData) {
+      const number = item[2];
+      const msg = (item[4] || "").trim();
+      if (msg && msg !== "0" && msg.toLowerCase() !== "null" && msg.length > 1) {
+        otps.push({ number, message: msg });
+      }
+    }
+
+    res.json({ success: true, data: otps });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ---------------- START SERVER ---------------- //
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
