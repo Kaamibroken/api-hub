@@ -1,58 +1,47 @@
-const https = require("https");
-const http = require("http");
-const zlib = require("zlib");
 const fetch = require("node-fetch");
+const pycountry = require("pycountry"); // npm install pycountry
+const BASE_URL = "http://51.89.99.105/NumberPanel";
 
 const PANEL_USERNAME = "Kami527";
 const PANEL_PASSWORD = "Kami526";
-const BASE_URL = "http://51.89.99.105/NumberPanel";
 
 let CURRENT_COOKIE = null;
 
 // ---------------- LOGIN FUNCTION ---------------- //
 async function performLogin() {
-  return new Promise(async (resolve, reject) => {
-    try {
-      const loginPage = await fetch(`${BASE_URL}/login`, {
-        headers: { "User-Agent": "Mozilla/5.0" },
-      });
-      const html = await loginPage.text();
+  const loginPage = await fetch(`${BASE_URL}/login`, { headers: { "User-Agent": "Mozilla/5.0" } });
+  const html = await loginPage.text();
 
-      const match = html.match(/What is (\d+) \+ (\d+) = \?/);
-      if (!match) return reject("Captcha not found");
+  const match = html.match(/What is (\d+) \+ (\d+) = \?/);
+  if (!match) throw new Error("Captcha not found");
 
-      const answer = parseInt(match[1]) + parseInt(match[2]);
-      const params = new URLSearchParams();
-      params.append("username", PANEL_USERNAME);
-      params.append("password", PANEL_PASSWORD);
-      params.append("capt", answer);
+  const answer = parseInt(match[1]) + parseInt(match[2]);
+  const params = new URLSearchParams();
+  params.append("username", PANEL_USERNAME);
+  params.append("password", PANEL_PASSWORD);
+  params.append("capt", answer);
 
-      const res = await fetch(`${BASE_URL}/signin`, {
-        method: "POST",
-        headers: {
-          "User-Agent": "Mozilla/5.0",
-          "Content-Type": "application/x-www-form-urlencoded",
-          Origin: BASE_URL,
-          Referer: `${BASE_URL}/login`,
-        },
-        body: params.toString(),
-      });
-
-      const cookies = res.headers.raw()["set-cookie"];
-      if (cookies) {
-        const phpsess = cookies.find((c) => c.startsWith("PHPSESSID"));
-        if (phpsess) {
-          CURRENT_COOKIE = phpsess.split(";")[0];
-          console.log("✅ Login Successful!", CURRENT_COOKIE);
-          resolve(true);
-          return;
-        }
-      }
-      reject("Login failed");
-    } catch (e) {
-      reject(e);
-    }
+  const res = await fetch(`${BASE_URL}/signin`, {
+    method: "POST",
+    headers: {
+      "User-Agent": "Mozilla/5.0",
+      "Content-Type": "application/x-www-form-urlencoded",
+      Origin: BASE_URL,
+      Referer: `${BASE_URL}/login`,
+    },
+    body: params.toString(),
   });
+
+  const cookies = res.headers.raw()["set-cookie"];
+  if (cookies) {
+    const phpsess = cookies.find((c) => c.startsWith("PHPSESSID"));
+    if (phpsess) {
+      CURRENT_COOKIE = phpsess.split(";")[0];
+      console.log("✅ Login Successful!", CURRENT_COOKIE);
+      return true;
+    }
+  }
+  throw new Error("Login failed");
 }
 
 // ---------------- API FETCH ---------------- //
@@ -73,7 +62,9 @@ async function fetchAPI(url) {
     return fetchAPI(url);
   }
 
-  return res.json();
+  const data = await res.json();
+  if (!data.aaData) throw new Error("Invalid JSON response");
+  return data;
 }
 
 // ---------------- DYNAMIC URLS ---------------- //
@@ -90,10 +81,24 @@ function getOtpUrl() {
   return `${BASE_URL}/client/res/data_smscdr.php?fdate1=${dateStart}&fdate2=${dateEnd}&iDisplayLength=50&_=${timestamp}`;
 }
 
-// ---------------- EXPORT HANDLER ---------------- //
+// ---------------- COUNTRY FLAG ---------------- //
+function getFlagEmoji(countryName) {
+  try {
+    const country = pycountry.countries.find((c) => c.name.toLowerCase() === countryName.toLowerCase());
+    if (!country) return "🏳️";
+    const code = country.alpha_2;
+    const OFFSET = 127397;
+    return code.split("").map((c) => String.fromCharCode(c.charCodeAt(0) + OFFSET)).join("");
+  } catch {
+    return "🏳️";
+  }
+}
+
+// ---------------- NODE.JS API HANDLER ---------------- //
 module.exports = async (req, res) => {
   const url = new URL(req.url, "http://localhost");
   const type = url.searchParams.get("type");
+  const random = url.searchParams.get("random") === "true"; // ?random=true
 
   if (!type) {
     res.statusCode = 400;
@@ -101,20 +106,43 @@ module.exports = async (req, res) => {
   }
 
   try {
-    let data;
     if (type === "numbers") {
-      data = await fetchAPI(getNumbersUrl());
-    } else if (type === "otp") {
-      data = await fetchAPI(getOtpUrl());
-    } else {
-      res.statusCode = 400;
-      return res.end(JSON.stringify({ error: "Invalid type (numbers or otp)" }));
+      const data = await fetchAPI(getNumbersUrl());
+      let numbers = data.aaData.map((item) => {
+        const full = item[0].trim();
+        const number = item[2];
+        const countryName = full.split("-")[0].trim();
+        return { number, country: countryName, flag: getFlagEmoji(countryName) };
+      });
+
+      if (random && numbers.length) {
+        numbers = [numbers[Math.floor(Math.random() * numbers.length)]];
+      }
+
+      res.setHeader("Content-Type", "application/json");
+      return res.end(JSON.stringify({ success: true, data: numbers }));
     }
 
-    res.setHeader("Content-Type", "application/json");
-    res.end(JSON.stringify(data));
+    if (type === "otp") {
+      const data = await fetchAPI(getOtpUrl());
+      const otps = [];
+
+      for (const item of data.aaData) {
+        const number = item[2];
+        const msg = (item[4] || "").trim();
+        if (msg && msg !== "0" && msg.toLowerCase() !== "null" && msg.length > 1) {
+          otps.push({ number, message: msg });
+        }
+      }
+
+      res.setHeader("Content-Type", "application/json");
+      return res.end(JSON.stringify({ success: true, data: otps }));
+    }
+
+    res.statusCode = 400;
+    return res.end(JSON.stringify({ error: "Invalid type (numbers or otp)" }));
   } catch (err) {
     res.statusCode = 500;
-    res.end(JSON.stringify({ error: "Server error", details: err.message }));
+    return res.end(JSON.stringify({ error: "Server error", details: err.message }));
   }
 };
