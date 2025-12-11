@@ -1,120 +1,111 @@
-const https = require("https");
-const http = require("http");
-const zlib = require("zlib");
-const fetch = require("node-fetch");
+const axios = require('axios');
 
-const PANEL_USERNAME = "Kami527";
-const PANEL_PASSWORD = "Kami526";
+const CREDENTIALS = {
+    username: "Kami520",
+    password: "Kami526"
+};
+
 const BASE_URL = "http://51.89.99.105/NumberPanel";
+const HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Mobile Safari/537.36",
+    "X-Requested-With": "XMLHttpRequest",
+    "Referer": `${BASE_URL}/client/MySMSNumbers`
+};
 
-let CURRENT_COOKIE = null;
+let cachedCookie = null;
 
-// ---------------- LOGIN FUNCTION ---------------- //
 async function performLogin() {
-  return new Promise(async (resolve, reject) => {
     try {
-      const loginPage = await fetch(`${BASE_URL}/login`, {
-        headers: { "User-Agent": "Mozilla/5.0" },
-      });
-      const html = await loginPage.text();
+        const session = axios.create({
+            withCredentials: true,
+            headers: { ...HEADERS, "Upgrade-Insecure-Requests": "1" }
+        });
 
-      const match = html.match(/What is (\d+) \+ (\d+) = \?/);
-      if (!match) return reject("Captcha not found");
-
-      const answer = parseInt(match[1]) + parseInt(match[2]);
-      const params = new URLSearchParams();
-      params.append("username", PANEL_USERNAME);
-      params.append("password", PANEL_PASSWORD);
-      params.append("capt", answer);
-
-      const res = await fetch(`${BASE_URL}/signin`, {
-        method: "POST",
-        headers: {
-          "User-Agent": "Mozilla/5.0",
-          "Content-Type": "application/x-www-form-urlencoded",
-          Origin: BASE_URL,
-          Referer: `${BASE_URL}/login`,
-        },
-        body: params.toString(),
-      });
-
-      const cookies = res.headers.raw()["set-cookie"];
-      if (cookies) {
-        const phpsess = cookies.find((c) => c.startsWith("PHPSESSID"));
-        if (phpsess) {
-          CURRENT_COOKIE = phpsess.split(";")[0];
-          console.log("✅ Login Successful!", CURRENT_COOKIE);
-          resolve(true);
-          return;
+        const loginPage = await session.get(`${BASE_URL}/login`);
+        
+        let initialCookie = "";
+        if (loginPage.headers['set-cookie']) {
+            const tempCookies = loginPage.headers['set-cookie'];
+            const phpSession = tempCookies.find(c => c.startsWith('PHPSESSID'));
+            if (phpSession) {
+                initialCookie = phpSession.split(';')[0];
+            }
         }
-      }
-      reject("Login failed");
+
+        const match = loginPage.data.match(/What is (\d+) \+ (\d+) = \?/);
+        if (!match) throw new Error("Captcha not found");
+
+        const num1 = parseInt(match[1]);
+        const num2 = parseInt(match[2]);
+        const answer = num1 + num2;
+
+        const params = new URLSearchParams();
+        params.append('username', CREDENTIALS.username);
+        params.append('password', CREDENTIALS.password);
+        params.append('capt', answer);
+
+        const loginResp = await session.post(`${BASE_URL}/signin`, params, {
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Origin": "http://51.89.99.105",
+                "Referer": `${BASE_URL}/login`,
+                "Cookie": initialCookie
+            },
+            maxRedirects: 0,
+            validateStatus: (status) => status >= 200 && status < 400
+        });
+
+        const newCookies = loginResp.headers['set-cookie'];
+        if (newCookies) {
+            const newPhpSession = newCookies.find(c => c.startsWith('PHPSESSID'));
+            if (newPhpSession) {
+                cachedCookie = newPhpSession.split(';')[0];
+                return cachedCookie;
+            }
+        }
+
+        if (initialCookie) {
+            cachedCookie = initialCookie;
+            return cachedCookie;
+        }
+
+        throw new Error("No cookie returned");
     } catch (e) {
-      reject(e);
+        return null;
     }
-  });
 }
 
-// ---------------- API FETCH ---------------- //
-async function fetchAPI(url) {
-  if (!CURRENT_COOKIE) await performLogin();
-
-  const res = await fetch(url, {
-    headers: {
-      "User-Agent": "Mozilla/5.0",
-      "X-Requested-With": "XMLHttpRequest",
-      Cookie: CURRENT_COOKIE,
-    },
-  });
-
-  if (res.status === 302 || res.url.includes("login")) {
-    // session expired
-    await performLogin();
-    return fetchAPI(url);
-  }
-
-  return res.json();
-}
-
-// ---------------- DYNAMIC URLS ---------------- //
-function getNumbersUrl() {
-  const timestamp = Date.now();
-  return `${BASE_URL}/client/res/data_smsnumbers.php?frange=&fclient=&sEcho=3&iColumns=6&iDisplayStart=0&iDisplayLength=-1&_=${timestamp}`;
-}
-
-function getOtpUrl() {
-  const today = new Date().toISOString().slice(0, 10);
-  const dateStart = encodeURIComponent(`${today} 00:00:00`);
-  const dateEnd = encodeURIComponent(`${today} 23:59:59`);
-  const timestamp = Date.now();
-  return `${BASE_URL}/client/res/data_smscdr.php?fdate1=${dateStart}&fdate2=${dateEnd}&iDisplayLength=50&_=${timestamp}`;
-}
-
-// ---------------- EXPORT HANDLER ---------------- //
 module.exports = async (req, res) => {
-  const url = new URL(req.url, "http://localhost");
-  const type = url.searchParams.get("type");
+    const { type } = req.query; 
 
-  if (!type) {
-    res.statusCode = 400;
-    return res.end(JSON.stringify({ error: "Missing ?type parameter" }));
-  }
-
-  try {
-    let data;
-    if (type === "numbers") {
-      data = await fetchAPI(getNumbersUrl());
-    } else if (type === "otp") {
-      data = await fetchAPI(getOtpUrl());
+    let targetUrl = "";
+    if (type === 'number') {
+        targetUrl = `${BASE_URL}/client/res/data_smsnumbers.php?frange=&fclient=&sEcho=2&iColumns=6&sColumns=%2C%2C%2C%2C%2C&iDisplayStart=0&iDisplayLength=-1&mDataProp_0=0&sSearch_0=&bRegex_0=false&bSearchable_0=true&bSortable_0=true&mDataProp_1=1&sSearch_1=&bRegex_1=false&bSearchable_1=true&bSortable_1=true&mDataProp_2=2&sSearch_2=&bRegex_2=false&bSearchable_2=true&bSortable_2=true&mDataProp_3=3&sSearch_3=&bRegex_3=false&bSearchable_3=true&bSortable_3=true&mDataProp_4=4&sSearch_4=&bRegex_4=false&bSearchable_4=true&bSortable_4=true&mDataProp_5=5&sSearch_5=&bRegex_5=false&bSearchable_5=true&bSortable_5=true&sSearch=&bRegex=false&iSortCol_0=0&sSortDir_0=asc&iSortingCols=1&_=1765425845351`;
+    } else if (type === 'sms') {
+        targetUrl = `${BASE_URL}/client/res/data_smscdr.php?fdate1=2025-12-10%2000:00:00&fdate2=2325-12-11%2023:59:59&frange=&fnum=&fcli=&fgdate=&fgmonth=&fgrange=&fgnumber=&fgcli=&fg=0&sesskey=Q05RRkJQUEJBUg==&sEcho=2&iColumns=7&sColumns=%2C%2C%2C%2C%2C%2C&iDisplayStart=0&iDisplayLength=-1&mDataProp_0=0&sSearch_0=&bRegex_0=false&bSearchable_0=true&bSortable_0=true&mDataProp_1=1&sSearch_1=&bRegex_1=false&bSearchable_1=true&bSortable_1=true&mDataProp_2=2&sSearch_2=&bRegex_2=false&bSearchable_2=true&bSortable_2=true&mDataProp_3=3&sSearch_3=&bRegex_3=false&bSearchable_3=true&bSortable_3=true&mDataProp_4=4&sSearch_4=&bRegex_4=false&bSearchable_4=true&bSortable_4=true&mDataProp_5=5&sSearch_5=&bRegex_5=false&bSearchable_5=true&bSortable_5=true&mDataProp_6=6&sSearch_6=&bRegex_6=false&bSearchable_6=true&bSortable_6=true&sSearch=&bRegex=false&iSortCol_0=0&sSortDir_0=desc&iSortingCols=1&_=1765425809322`;
     } else {
-      res.statusCode = 400;
-      return res.end(JSON.stringify({ error: "Invalid type (numbers or otp)" }));
+        return res.status(400).json({ error: "Invalid type" });
     }
 
-    res.setHeader("Content-Type", "application/json");
-    res.end(JSON.stringify(data));
-  } catch (err) {
-    res.statusCode = 500;
-    res.end(JSON.stringify({ error: "Server error", details: err.message }));
-  }
+    try {
+        if (!cachedCookie) {
+            await performLogin();
+        }
+
+        let response = await axios.get(targetUrl, {
+            headers: { ...HEADERS, "Cookie": cachedCookie }
+        });
+
+        if (typeof response.data === 'string' && (response.data.includes('login') || response.data.includes('Direct Script'))) {
+            await performLogin();
+            response = await axios.get(targetUrl, {
+                headers: { ...HEADERS, "Cookie": cachedCookie }
+            });
+        }
+
+        return res.status(200).json(response.data);
+
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
 };
