@@ -1,7 +1,7 @@
 const axios = require('axios');
 
 const CREDENTIALS = {
-    username: "Kami527",
+    username: "Kami522",
     password: "Kami526"
 };
 
