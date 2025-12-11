@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const CREDENTIALS = {
-    username: "Kami527",
+    username: "Kami520",
     password: "Kami526"
 };
 
