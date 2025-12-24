@@ -99,12 +99,16 @@ module.exports = async (req, res) => {
         
         if (jsonData.aaData && Array.isArray(jsonData.aaData)) {
           jsonData.aaData = jsonData.aaData.map(row => {
-            if (row[0] && typeof row[0] === 'string') {
-               let lines = row[0].split('\n');
-               let cleanLines = lines.filter(line => !line.includes('<input') && line.trim() !== "");
-               row[0] = cleanLines.join('\n');
+            let cleanRow = row.slice(1);
+            if (cleanRow[3] && typeof cleanRow[3] === 'string' && cleanRow[3].includes('<br')) {
+                let parts = cleanRow[3].split(/<br\s*\/?>/i);
+                
+                let duration = parts[0].trim();
+                let price = parts[1] ? parts[1].replace(/<[^>]*>?/gm, '').trim() : "$ 0"; 
+                cleanRow.splice(3, 1, duration, price);
             }
-            return row;
+
+            return cleanRow;
           });
           
           resultData = JSON.stringify(jsonData);
