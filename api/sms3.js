@@ -91,9 +91,30 @@ module.exports = async (req, res) => {
 
     let resultData;
 
-    if (type === "numbers") {
+        if (type === "numbers") {
       const numResp = await makeRequest("GET", `${CONFIG.baseUrl}/agent/res/data_smsnumbers.php?frange=&fclient=&sEcho=2&iColumns=8&sColumns=%2C%2C%2C%2C%2C%2C%2C&iDisplayStart=0&iDisplayLength=-1&mDataProp_0=0&sSearch_0=&bRegex_0=false&bSearchable_0=true&bSortable_0=false&mDataProp_1=1&sSearch_1=&bRegex_1=false&bSearchable_1=true&bSortable_1=true&mDataProp_2=2&sSearch_2=&bRegex_2=false&bSearchable_2=true&bSortable_2=true&mDataProp_3=3&sSearch_3=&bRegex_3=false&bSearchable_3=true&bSortable_3=true&mDataProp_4=4&sSearch_4=&bRegex_4=false&bSearchable_4=true&bSortable_4=true&mDataProp_5=5&sSearch_5=&bRegex_5=false&bSearchable_5=true&bSortable_5=true&mDataProp_6=6&sSearch_6=&bRegex_6=false&bSearchable_6=true&bSortable_6=true&mDataProp_7=7&sSearch_7=&bRegex_7=false&bSearchable_7=true&bSortable_7=false&sSearch=&bRegex=false&iSortCol_0=0&sSortDir_0=asc&iSortingCols=1`, null, { "Referer": `${CONFIG.baseUrl}/agent/MySMSNumbers`, "X-Requested-With": "XMLHttpRequest" });
-      resultData = numResp.body;
+      
+      try {
+        let jsonData = JSON.parse(numResp.body);
+        
+        if (jsonData.aaData && Array.isArray(jsonData.aaData)) {
+          jsonData.aaData = jsonData.aaData.map(row => {
+            if (row[0] && typeof row[0] === 'string') {
+               let lines = row[0].split('\n');
+               let cleanLines = lines.filter(line => !line.includes('<input') && line.trim() !== "");
+               row[0] = cleanLines.join('\n');
+            }
+            return row;
+          });
+          
+          resultData = JSON.stringify(jsonData);
+        } else {
+          resultData = numResp.body;
+        }
+      } catch (e) {
+        resultData = numResp.body;
+      }
+      
     } else if (type === "sms") {
       const reportPage = await makeRequest("GET", `${CONFIG.baseUrl}/agent/SMSCDRReports`, null, { "Referer": `${CONFIG.baseUrl}/agent/SMSDashboard` });
       const tokenMatch = reportPage.body.match(/csstr=([a-f0-9]+)/);
