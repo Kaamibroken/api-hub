@@ -54,7 +54,7 @@ module.exports = async (req, res) => {
     "X-Requested-With": "XMLHttpRequest",
     "Accept-Encoding": "gzip, deflate",
     "Accept-Language": "en-US,en;q=0.9",
-    Cookie: "PHPSESSID=a382hddun6e81po434n8veju8i",
+    Cookie: "PHPSESSID=kvqv932lkjlg5v6pfj6m0vkb7e",
   };
 
   let url;
