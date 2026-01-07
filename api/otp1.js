@@ -6,7 +6,7 @@ module.exports = async (req, res) => {
     const { type } = req.query;
 
     if (!type || (type !== 'number' && type !== 'sms')) {
-        return res.status(400).json({ error: "Invalid type. Use ?type=number or ?type=sms" });
+        return res.status(400).json({ error: "Invalid type. Use ?type=numbers or ?type=sms" });
     }
 
     try {
